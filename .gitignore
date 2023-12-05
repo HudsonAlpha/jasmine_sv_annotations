@@ -1,0 +1,5 @@
+.snakemake/
+pipeline/
+logs/
+*.log
+*/__pycache__/*
