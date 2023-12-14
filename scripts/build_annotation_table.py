@@ -28,12 +28,12 @@ with Lmdb.open(file=dbfile, flag='n', map_size=1024^3) as db:
             print(annotationsource['annotations'])
         for field in annotationsource['annotations']:
             db[f'{annotationsource["description"]}_{field}'] = json.dumps(vcf.get_header_type(field))
-        for vbatch in batched(vcf, 10000):
+        for vbatch in batched(vcf, 25_000):
             #db[v.ID] = json.dumps({f'{annotationsource["description"]}_{field}': v.INFO.get(field,".") for field in annotationsource['annotations']})
             db.update(
                 {
                     v.ID: json.dumps(
-                        {f'{annotationsource["description"]}_{field}': v.INFO.get(field,".") for field in annotationsource['annotations']}
+                        {f'{annotationsource["description"]}_{field}': v.INFO.get(field,'.') for field in annotationsource['annotations']}
                         ) for v in vbatch
                 }
             )
