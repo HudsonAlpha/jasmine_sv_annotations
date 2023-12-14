@@ -20,12 +20,12 @@ ORDERED_CALLERS = [
         
     }
 ]
-
+# annotations is a list of INFO fields to transfer or '*' to transfer all INFO fields
 ANNOTATIONS = [
     {
         'description': 'inhouse_pbsv',
         'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/pbsv_frequency_20230627/pbsv_single_call_merge_266_individuals_2023-06-27.uniqueid.vcf',
-        'annotations': ['AC', 'AN', 'AF']
+        'annotations': '*'
     },
     # {
     #     'description': 'gnomad4',
@@ -40,14 +40,14 @@ ANNOTATIONS = [
     {
         'description': 'hprc_giab_pbsv',
         'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/HPRC_GIAB.GRCh38.pbsv.uniqueid.vcf',
-        'annotations': ['AC', 'AN', 'AF']
+        'annotations': '*'
     }
 ]
 
 rule consensus:
     input: 
         expand(PIPELINE_DIRECTORY + '/annotate/{sample}.annomerge.annotated.vcf', sample=config['samples'].split(',')), 
-        #PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
+        PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
 
 rule prep_pbsv:
     input: '/cluster/projects/pacbio_gsc_gcooper/{sample}/{sample}.sv.vcf.gz'
@@ -149,6 +149,7 @@ rule annotate_jasmine:
     script: 'transfer_annotations.py'
 
 # This takes about 15 minutes for inhouse + gnomad + hgsvc2 + hprc_giab
+# TODO: Figure out how to make this always rebuild if the parameters change
 rule build_annotation_table:
     output: PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
     params:
@@ -156,7 +157,7 @@ rule build_annotation_table:
     conda: 'cyvcf2-lmdbm.yaml'
     threads: 1
     resources:
-        mem_mb=64*1024
+        mem_mb=4*1024
     script: 'build_annotation_table.py'
 
 
