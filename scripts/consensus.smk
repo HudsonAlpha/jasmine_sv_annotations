@@ -21,8 +21,33 @@ ORDERED_CALLERS = [
     }
 ]
 
+ANNOTATIONS = [
+    {
+        'description': 'inhouse_pbsv',
+        'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/pbsv_frequency_20230627/pbsv_single_call_merge_266_individuals_2023-06-27.uniqueid.vcf',
+        'annotations': ['AC', 'AN', 'AF']
+    },
+    {
+        'description': 'gnomad4',
+        'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/gnomad.v4.0.sv.ALL.vcf', # has unique IDs already
+        'annotations': ['POPMAX_AF','AC','AN','AF']
+    },
+    {
+        'description': 'hgsvc2',
+        'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/hgsvc2_tagged_variants_freeze4_sv_insdel_alt.uniqueid.vcf',
+        'annotations': ['AC', 'AN', 'AF', 'SAMPLE']
+    },
+    {
+        'description': 'hprc_giab_pbsv',
+        'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/HPRC_GIAB.GRCh38.pbsv.uniqueid.vcf',
+        'annotations': ['AC', 'AN', 'AF']
+    }
+]
+
 rule consensus:
-    input: expand(PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.vcf.gz', sample=config['samples'].split(','))
+    input: 
+        #expand(PIPELINE_DIRECTORY + '/annotate/{sample}.annomerge.vcf', sample=config['samples'].split(',')), 
+        PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
 
 rule prep_pbsv:
     input: '/cluster/projects/pacbio_gsc_gcooper/{sample}/{sample}.sv.vcf.gz'
@@ -79,7 +104,44 @@ rule jasmine_consensus:
         '''
         mkdir -p {output.tmp_dir}
         cat {params.headers} > {output.headers}
-        jasmine --leave_breakpoints --min_overlap={params.min_overlap} --min_seq_id={params.min_seq_id} --dup_to_ins --comma_filelist --output_genotypes out_file={output.tmp_vcf} genome_file={params.genome} threads={threads} out_dir={output.tmp_dir} file_list={input.pbsv_vcf},{input.sniffles_vcf}
+        jasmine --min_overlap={params.min_overlap} --min_seq_id={params.min_seq_id} --dup_to_ins --comma_filelist --output_genotypes out_file={output.tmp_vcf} genome_file={params.genome} threads={threads} out_dir={output.tmp_dir} file_list={input.pbsv_vcf},{input.sniffles_vcf}
         bcftools annotate --header-lines {output.headers} {output.tmp_vcf} | bcftools sort -o {output.vcf} 
         tabix -p vcf {output.vcf}
         '''
+
+rule jasmine_annotation_merge:
+    input: 
+        vcf=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.vcf.gz',
+        tbi=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.vcf.gz'
+    output:
+        vcf=PIPELINE_DIRECTORY + '/annotate/{sample}.annomerge.vcf',
+        tmp_dir=temp(directory(PIPELINE_DIRECTORY + '/annotate/{sample}.working/'))
+    params:
+        genome=REFERENCE,
+        annotation_vcfs = ','.join([x['vcf'] for x in ANNOTATIONS]),
+        min_overlap=0.65,
+        min_seq_id=0.65
+    threads: 4
+    resources:
+        mem_mb=48*1024
+    conda: 'jasmine.yaml'
+    # seems unhappy with duptoins with these inputs
+    shell:
+        '''
+        # these headers will only have the primary source VCF header lines, so they will be complete at this point 
+        mkdir -p {output.tmp_dir}
+        gunzip -c {input.vcf} > {output.tmp_dir}/input.vcf
+        jasmine --require_first_sample --centroid-merging --min_overlap={params.min_overlap} --min_seq_id={params.min_seq_id} --comma_filelist out_file={output.vcf} genome_file={params.genome} threads={threads} out_dir={output.tmp_dir} file_list={output.tmp_dir}/input.vcf,{params.annotation_vcfs}
+        '''
+
+# This takes about 15 minutes for inhouse + gnomad + hgsvc2 + hprc_giab
+rule build_annotation_table:
+    output: PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
+    params:
+        annotations = ANNOTATIONS
+    conda: 'cyvcf2-lmdbm.yaml'
+    threads: 1
+    resources:
+        mem_mb=64*1024
+    script: 'build_annotation_table.py'
+            
