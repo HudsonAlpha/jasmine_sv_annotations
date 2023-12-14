@@ -3,3 +3,7 @@ pipeline/
 logs/
 *.log
 */__pycache__/*
+*.mdb
+*.pyc
+*.snf
+*.vcf
