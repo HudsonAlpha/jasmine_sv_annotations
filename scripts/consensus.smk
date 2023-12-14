@@ -27,11 +27,11 @@ ANNOTATIONS = [
         'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/pbsv_frequency_20230627/pbsv_single_call_merge_266_individuals_2023-06-27.uniqueid.vcf',
         'annotations': ['AC', 'AN', 'AF']
     },
-    {
-        'description': 'gnomad4',
-        'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/gnomad.v4.0.sv.ALL.vcf', # has unique IDs already
-        'annotations': ['POPMAX_AF','AC','AN','AF']
-    },
+    # {
+    #     'description': 'gnomad4',
+    #     'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/gnomad.v4.0.sv.ALL.vcf', # has unique IDs already
+    #     'annotations': ['POPMAX_AF','AC','AN','AF']
+    # },
     {
         'description': 'hgsvc2',
         'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/hgsvc2_tagged_variants_freeze4_sv_insdel_alt.uniqueid.vcf',
@@ -46,8 +46,8 @@ ANNOTATIONS = [
 
 rule consensus:
     input: 
-        #expand(PIPELINE_DIRECTORY + '/annotate/{sample}.annomerge.vcf', sample=config['samples'].split(',')), 
-        PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
+        expand(PIPELINE_DIRECTORY + '/annotate/{sample}.annomerge.annotated.vcf', sample=config['samples'].split(',')), 
+        #PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
 
 rule prep_pbsv:
     input: '/cluster/projects/pacbio_gsc_gcooper/{sample}/{sample}.sv.vcf.gz'
@@ -134,6 +134,20 @@ rule jasmine_annotation_merge:
         jasmine --require_first_sample --centroid-merging --min_overlap={params.min_overlap} --min_seq_id={params.min_seq_id} --comma_filelist out_file={output.vcf} genome_file={params.genome} threads={threads} out_dir={output.tmp_dir} file_list={output.tmp_dir}/input.vcf,{params.annotation_vcfs}
         '''
 
+rule annotate_jasmine:
+    input:
+        vcf=PIPELINE_DIRECTORY + '/annotate/{sample}.annomerge.vcf',
+        annotation_db=PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
+    output:
+        vcf=PIPELINE_DIRECTORY + '/annotate/{sample}.annomerge.annotated.vcf'
+    params:
+        annotations = ANNOTATIONS
+    conda: 'cyvcf2-lmdbm.yaml'
+    threads: 1
+    resources:
+        mem_mb=8*1024
+    script: 'transfer_annotations.py'
+
 # This takes about 15 minutes for inhouse + gnomad + hgsvc2 + hprc_giab
 rule build_annotation_table:
     output: PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
@@ -144,4 +158,15 @@ rule build_annotation_table:
     resources:
         mem_mb=64*1024
     script: 'build_annotation_table.py'
-            
+
+
+# could be useful 
+# rule sample_annotation_table:
+#     output: PIPELINE_DIRECTORY + '/consensus/{sample}.db/data.mdb'
+#     params:
+#         annotations = ANNOTATIONS
+#     conda: 'cyvcf2-lmdbm.yaml'
+#     threads: 1
+#     resources:
+#         mem_mb=16*1024
+#     script: 'build_annotation_table.py'
