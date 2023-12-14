@@ -45,6 +45,9 @@ for variant in input_vcf:
                 annos_to_add = {}
             #print(f'{annos_to_add} to {variant.CHROM} {variant.POS} {variant.REF} {variant.ALT}')
             for k,v in annos_to_add.items():
+                if input_vcf.get_header_type(k)['Type'] == 'Flag' and v == '.': # This will properly remove flag annotations instead of showing FLAG='.'
+                    variant.INFO[k] = False
+                    continue
                 try:
                     variant.INFO[k] = v
                 except AttributeError: # attempt to handle strangely formatted INFO fields (tuples,etc.)
