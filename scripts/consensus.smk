@@ -9,18 +9,19 @@ PIPELINE_DIRECTORY='/cluster/home/jlawlor/jasmine_consensus/pipeline'
 ORDERED_CALLERS = [
     {
         'name': 'pbsv',
-        'order': 1,
+        'order': 0,
         'info_header': f'{SCRIPT_DIRECTORY}/pbsv_info.txt'
         
     },
     {
         'name': 'sniffles2',
-        'order': 2,
+        'order': 1,
         'info_header': f'{SCRIPT_DIRECTORY}/sniffles_info.txt'
         
     }
 ]
 # annotations is a list of INFO fields to transfer or '*' to transfer all INFO fields
+# Consider: do I want this to be an input so that all outputs are force regeenrated if we add something new
 ANNOTATIONS = [
     {
         'description': 'inhouse_pbsv',
@@ -44,10 +45,11 @@ ANNOTATIONS = [
     }
 ]
 
-rule consensus:
+rule all:
     input: 
-        expand(PIPELINE_DIRECTORY + '/annotate/{sample}.annomerge.annotated.vcf', sample=config['samples'].split(',')), 
-        PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
+        expand(PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.squashed.vcf', sample=config['samples'].split(',')),
+        #expand(PIPELINE_DIRECTORY + '/consensus/{sample}.db/data.mdb', sample=config['samples'].split(',')), 
+        #PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
 
 rule prep_pbsv:
     input: '/cluster/projects/pacbio_gsc_gcooper/{sample}/{sample}.sv.vcf.gz'
@@ -86,9 +88,9 @@ rule jasmine_consensus:
         pbsv_vcf=PIPELINE_DIRECTORY + '/prepped_pbsv/{sample}.pbsv.vcf',
         sniffles_vcf=PIPELINE_DIRECTORY + '/prepped_sniffles/{sample}.sniffles.vcf'
     output: 
-        vcf=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.vcf.gz',
-        tbi=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.vcf.gz.tbi',
-        tmp_vcf=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.vcf',
+        vcf=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.vcf',
+        #tbi=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.vcf.gz.tbi',
+        tmp_vcf=temp(PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.tmp.vcf'),
         tmp_dir=temp(directory(PIPELINE_DIRECTORY + '/consensus/{sample}.working/')),
         headers=temp(PIPELINE_DIRECTORY + '/consensus/{sample}.headers.txt')
     threads: 4
@@ -106,8 +108,18 @@ rule jasmine_consensus:
         cat {params.headers} > {output.headers}
         jasmine --min_overlap={params.min_overlap} --min_seq_id={params.min_seq_id} --dup_to_ins --comma_filelist --output_genotypes out_file={output.tmp_vcf} genome_file={params.genome} threads={threads} out_dir={output.tmp_dir} file_list={input.pbsv_vcf},{input.sniffles_vcf}
         bcftools annotate --header-lines {output.headers} {output.tmp_vcf} | bcftools sort -o {output.vcf} 
-        tabix -p vcf {output.vcf}
         '''
+
+rule squash_genotypes:
+    input: 
+        vcf=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.vcf',
+    output: 
+        vcf=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.squashed.vcf',
+    conda: 'cyvcf2-lmdbm.yaml' # because it has numpy
+    threads: 1
+    resources:
+        mem_mb=2*1024
+    script: 'simple_squash.py'
 
 rule jasmine_annotation_merge:
     input: 
@@ -161,13 +173,26 @@ rule build_annotation_table:
     script: 'build_annotation_table.py'
 
 
-# could be useful 
-# rule sample_annotation_table:
-#     output: PIPELINE_DIRECTORY + '/consensus/{sample}.db/data.mdb'
-#     params:
-#         annotations = ANNOTATIONS
-#     conda: 'cyvcf2-lmdbm.yaml'
-#     threads: 1
-#     resources:
-#         mem_mb=16*1024
-#     script: 'build_annotation_table.py'
+rule sample_annotation_table:
+    input:
+        sniffles_vcf=PIPELINE_DIRECTORY + '/prepped_sniffles/{sample}.sniffles.vcf',
+        pbsv_vcf=PIPELINE_DIRECTORY + '/prepped_pbsv/{sample}.pbsv.vcf'
+    output: PIPELINE_DIRECTORY + '/consensus/{sample}.db/data.mdb'
+    params:
+        annotations = [
+            {
+                'description': 'sniffles',
+                'vcf': 'sniffles_vcf',
+                'annotations': '*'
+            },
+            {
+                'description': 'pbsv',
+                'vcf': 'pbsv_vcf',
+                'annotations': '*'
+            }
+        ]
+    conda: 'cyvcf2-lmdbm.yaml'
+    threads: 1
+    resources:
+        mem_mb=16*1024
+    script: 'build_annotation_table.py'

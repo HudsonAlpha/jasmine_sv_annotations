@@ -21,7 +21,10 @@ print(dbfile)
 with Lmdb.open(file=dbfile, flag='n', map_size=1024^3) as db:
     for annotationsource in snakemake.params.annotations:
         print(annotationsource)
-        vcf = VCF(annotationsource['vcf'])
+        try: # primary case, VCF is from the annotation dictionary
+            vcf = VCF(annotationsource['vcf'])
+        except OSError: # secondary case, the input declaration the inputs key
+            vcf = VCF(snakemake.input[annotationsource['vcf']])
         # add an item to the db that is {description}_{annotation} = serialized vcf header info for that annotation so we can look this up to modify header of output vcf later
         if annotationsource['annotations'] == '*':
             annotationsource['annotations'] = [x['ID'] for x in vcf.header_iter() if x['HeaderType'] == 'INFO']
