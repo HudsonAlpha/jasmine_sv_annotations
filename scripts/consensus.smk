@@ -28,11 +28,11 @@ ANNOTATIONS = [
         'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/pbsv_frequency_20230627/pbsv_single_call_merge_266_individuals_2023-06-27.uniqueid.vcf',
         'annotations': '*'
     },
-    # {
-    #     'description': 'gnomad4',
-    #     'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/gnomad.v4.0.sv.ALL.vcf', # has unique IDs already
-    #     'annotations': ['POPMAX_AF','AC','AN','AF']
-    # },
+    {
+        'description': 'gnomad4',
+        'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/gnomad.v4.0.sv.ALL.vcf', # has unique IDs already
+        'annotations': ['POPMAX_AF','AC','AN','AF']
+    },
     {
         'description': 'hgsvc2',
         'vcf': '/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/hgsvc2_tagged_variants_freeze4_sv_insdel_alt.uniqueid.vcf',
@@ -119,7 +119,10 @@ rule squash_genotypes:
     threads: 1
     resources:
         mem_mb=2*1024
-    script: 'simple_squash.py'
+    shell:
+        '''
+        python {SCRIPT_DIRECTORY}/squash_genotypes.py --input {input.vcf} --output {output.vcf} --sample {wildcards.sample}
+        '''
 
 rule jasmine_annotation_merge:
     input: 
@@ -161,16 +164,29 @@ rule annotate_jasmine:
     script: 'transfer_annotations.py'
 
 # This takes about 15 minutes for inhouse + gnomad + hgsvc2 + hprc_giab
-# TODO: Figure out how to make this always rebuild if the parameters change
-rule build_annotation_table:
-    output: PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
+
+rule write_annotation_parameters:
+    output: PIPELINE_DIRECTORY + 'annotation.db/ANNOTATIONS.json'
     params:
         annotations = ANNOTATIONS
+    shell:
+        '''
+        python -c "import json; f = open('annotations.json', 'w'); json.dump({annotations}, f); f.close()"
+        '''
+
+rule build_annotation_table:
+    input:
+        annotations=PIPELINE_DIRECTORY + 'annotation.db/ANNOTATIONS.json'
+    output: PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
     conda: 'cyvcf2-lmdbm.yaml'
     threads: 1
     resources:
         mem_mb=4*1024
-    script: 'build_annotation_table.py'
+    shell:
+        '''
+
+        python {SCRIPT_DIRECTORY}/build_annotation_table.py --output {output} --annotations {input.annotations}
+        '''
 
 
 rule sample_annotation_table:
@@ -195,4 +211,9 @@ rule sample_annotation_table:
     threads: 1
     resources:
         mem_mb=16*1024
-    script: 'build_annotation_table.py'
+    shell:
+        '''
+
+        python -c "import json; f = open('{{PIPELINE_DIRECTORY}}/consensus/{sample}.db/annotations.json', 'w'); json.dump({annotations}, f); f.close()"
+        python {SCRIPT_DIRECTORY}/build_annotation_table.py --output {output} --annotations {{PIPELINE_DIRECTORY}}/consensus/{sample}.db/annotations.json
+        '''
