@@ -6,20 +6,33 @@ import json
 from itertools import islice
 import argparse
 
+def tuple_type(s):
+    try:
+        return tuple(s.split(','))
+    except:
+        raise argparse.ArgumentTypeError("Tuples must be x,y")
+
+
 
 # Create the parser
 parser = argparse.ArgumentParser(description='Build an annotation table with keys from the VCF ID field and values from annotations json file..')
 
 # Add the arguments
 parser.add_argument('-o', '--output', type=str, required=True, help='The output filename')
-parser.add_argument('--annotations', required=True, help='Annotations json file.')
+parser.add_argument('--annotations', required=False, help='Annotations json file.')
+parser.add_argument('--vcftuples', nargs='*', type=tuple_type, help='VCF files to use if not specified in annotations. Format is vcf,description.')
+
 
 # Parse the arguments
 args = parser.parse_args()
 
+if args.annotations is None and args.vcftuples is None:
+    raise ValueError('Must provide either --annotations or --vcftuples')
+
 # Now you can use args.output and args.annotations in your script
-annotations = json.load(open(args.annotations))
-output_file
+if args.annotations:
+    annotations = json.load(open(args.annotations))
+
 def batched(iterable, n):
     # batched('ABCDEFG', 3) --> ABC DEF G
     # Code from rough equivalent of itertools.batched https://docs.python.org/3/library/itertools.html#itertools.batched
@@ -32,6 +45,13 @@ def batched(iterable, n):
 # snakemake object is inherited
 dbfile = os.path.dirname(args.output)
 print(dbfile)
+
+if args.vcftuples:
+    annotations = []
+    for vcf in args.vcftuples:
+        annotations.append({'vcf': vcf[0], 'description': vcf[1], 'annotations': '*'})
+
+
 
 with Lmdb.open(file=dbfile, flag='n', map_size=1024^3) as db:
     for annotationsource in annotations:
