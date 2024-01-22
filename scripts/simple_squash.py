@@ -1,8 +1,15 @@
 from numpy import argmax
-# inherit snakemake object
-sample = snakemake.wildcards['sample']
+import argparse
+parser = argparse.ArgumentParser(description='Squash a Jasmine VCF into a single sample VCF (simple).')
+parser.add_argument('-o', '--output', type=str, required=True, help='The output VCF')
+parser.add_argument('-i', '--input', required=True, help='Input VCF.')
+parser.add_argument('-s', '--sample', required=True, help='Sample name to use in output VCF.')
+args = parser.parse_args()
 
-with open(snakemake.input['vcf'], 'r') as input_vcf, open(snakemake.output['vcf'], 'w') as output_vcf:
+# inherit snakemake object
+sample = args.sample
+
+with open(args.input, 'r') as input_vcf, open(args.output, 'w') as output_vcf:
     for line in input_vcf:
         line = line.strip().split('\t')
         if line[0].startswith('#CHROM'):

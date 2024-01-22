@@ -4,9 +4,17 @@ import os
 import json
 from time import sleep
 from lmdb import InvalidParameterError
+import argparse
+parser = argparse.ArgumentParser(description='Transfer ID-keyed annotations from an annotation table to a Jasmine VCF.')
+parser.add_argument('-o', '--output', type=str, required=True, help='The output filename')
+parser.add_argument('-a', '--annotation_db', required=True, help='Annotation table.')
+parser.add_argument('-j', '--annotation_json', required=True, help='Annotation json file.')
+parser.add_argument('-i', '--input', required=True, help='Input VCF.')
+args = parser.parse_args()
+
 
 # inherit snakemake object
-dbfile = os.path.dirname(snakemake.input['annotation_db'])
+dbfile = os.path.dirname(sargs.annotation_db)
 print(dbfile)
 attempts = 0
 while attempts < 10:
@@ -18,11 +26,12 @@ while attempts < 10:
         attempts += 1
         sleep(10)
 
-input_vcf_path = snakemake.input['vcf']
-output_vcf_path = snakemake.output['vcf']
+input_vcf_path = args.input
+output_vcf_path = args.output
+annotations = json.load(open(args.annotations))
 
 input_vcf = VCF(input_vcf_path)
-for annotationsource in snakemake.params.annotations:
+for annotationsource in annotations:
     if annotationsource['annotations'] == '*':
         check_vcf = VCF(annotationsource['vcf'])
         annotationsource['annotations'] = [x['ID'] for x in check_vcf.header_iter() if x['HeaderType'] == 'INFO']

@@ -4,7 +4,22 @@ import os, shutil
 import pprint
 import json
 from itertools import islice
+import argparse
 
+
+# Create the parser
+parser = argparse.ArgumentParser(description='Build an annotation table with keys from the VCF ID field and values from annotations json file..')
+
+# Add the arguments
+parser.add_argument('-o', '--output', type=str, required=True, help='The output filename')
+parser.add_argument('--annotations', required=True, help='Annotations json file.')
+
+# Parse the arguments
+args = parser.parse_args()
+
+# Now you can use args.output and args.annotations in your script
+annotations = json.load(open(args.annotations))
+output_file
 def batched(iterable, n):
     # batched('ABCDEFG', 3) --> ABC DEF G
     # Code from rough equivalent of itertools.batched https://docs.python.org/3/library/itertools.html#itertools.batched
@@ -15,16 +30,13 @@ def batched(iterable, n):
         yield batch
 
 # snakemake object is inherited
-dbfile = os.path.dirname(snakemake.output[0])
+dbfile = os.path.dirname(args.output)
 print(dbfile)
 
 with Lmdb.open(file=dbfile, flag='n', map_size=1024^3) as db:
-    for annotationsource in snakemake.params.annotations:
+    for annotationsource in annotations:
         print(annotationsource)
-        try: # primary case, VCF is from the annotation dictionary
-            vcf = VCF(annotationsource['vcf'])
-        except OSError: # secondary case, the input declaration the inputs key
-            vcf = VCF(snakemake.input[annotationsource['vcf']])
+        vcf = VCF(annotationsource['vcf'])
         # add an item to the db that is {description}_{annotation} = serialized vcf header info for that annotation so we can look this up to modify header of output vcf later
         if annotationsource['annotations'] == '*':
             annotationsource['annotations'] = [x['ID'] for x in vcf.header_iter() if x['HeaderType'] == 'INFO']
