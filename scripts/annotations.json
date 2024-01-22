@@ -1,0 +1,22 @@
+[ 
+    {
+        "description": "inhouse_pbsv",
+        "vcf": "/cluster/projects/pacbio_gsc_gcooper/resources/pbsv_frequency_20230627/pbsv_single_call_merge_266_individuals_2023-06-27.uniqueid.vcf",
+        "annotations": "*"
+    },
+    {
+        "description": "gnomad4",
+        "vcf": "/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/gnomad.v4.0.sv.ALL.vcf", 
+        "annotations": ["POPMAX_AF","AC","AN","AF"]
+    },
+    {
+        "description": "hgsvc2",
+        "vcf": "/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/hgsvc2_tagged_variants_freeze4_sv_insdel_alt.uniqueid.vcf",
+        "annotations": ["AC", "AN", "AF", "SAMPLE"]
+    },
+    {
+        "description": "hprc_giab_pbsv",
+        "vcf": "/cluster/projects/pacbio_gsc_gcooper/resources/sv_annotations/original/HPRC_GIAB.GRCh38.pbsv.uniqueid.vcf",
+        "annotations": "*"
+    }
+]
