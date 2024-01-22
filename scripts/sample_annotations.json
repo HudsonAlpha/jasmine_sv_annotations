@@ -1,0 +1,12 @@
+[
+    {
+        "description": "sniffles",
+        "vcf": "sniffles_vcf",
+        "annotations": "*"
+    },
+    {
+        "description": "pbsv",
+        "vcf": "pbsv_vcf",
+        "annotations": "*"
+    }
+]
