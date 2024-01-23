@@ -5,16 +5,35 @@ import json
 from time import sleep
 from lmdb import InvalidParameterError
 import argparse
+def tuple_type(s):
+    try:
+        return tuple(s.split(','))
+    except:
+        raise argparse.ArgumentTypeError("Tuples must be x,y")
+
+
+
 parser = argparse.ArgumentParser(description='Transfer ID-keyed annotations from an annotation table to a Jasmine VCF.')
 parser.add_argument('-o', '--output', type=str, required=True, help='The output filename')
 parser.add_argument('-a', '--annotation_db', required=True, help='Annotation table.')
-parser.add_argument('-j', '--annotation_json', required=True, help='Annotation json file.')
+parser.add_argument('-j', '--annotation_json', required=False, help='Annotation json file.')
 parser.add_argument('-i', '--input', required=True, help='Input VCF.')
+parser.add_argument('--vcftuples', nargs='*', type=tuple_type, help='VCF files to use if not specified in annotations. Format is vcf,description.')
 args = parser.parse_args()
 
+if args.annotation_json is None and args.vcftuples is None:
+    raise ValueError('Must provide either --annotations or --vcftuples')
+
+if args.annotation_json:
+    annotations = json.load(open(args.annotation_json))
+
+if args.vcftuples:
+    annotations = []
+    for vcf in args.vcftuples:
+        annotations.append({'vcf': vcf[0], 'description': vcf[1], 'annotations': '*'})
 
 # inherit snakemake object
-dbfile = os.path.dirname(sargs.annotation_db)
+dbfile = os.path.dirname(args.annotation_db)
 print(dbfile)
 attempts = 0
 while attempts < 10:
@@ -28,7 +47,7 @@ while attempts < 10:
 
 input_vcf_path = args.input
 output_vcf_path = args.output
-annotations = json.load(open(args.annotations))
+
 
 input_vcf = VCF(input_vcf_path)
 for annotationsource in annotations:
