@@ -70,14 +70,11 @@ rule jasmine_consensus:
     input: 
         pbsv_vcf=PIPELINE_DIRECTORY + '/prepped_pbsv/{sample}.pbsv.vcf',
         sniffles_vcf=PIPELINE_DIRECTORY + '/prepped_sniffles/{sample}.sniffles.vcf',
-        sample_annotation_table=PIPELINE_DIRECTORY + '/consensus/{sample}.db/data.mdb',
-        annotation_json=PIPELINE_DIRECTORY + '/consensus/{sample}.annotations.json'
     output: 
         vcf=temp(PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.unsquashed.vcf'),
         tmp_vcf=temp(PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.tmp.vcf'),
         tmp_dir=temp(directory(PIPELINE_DIRECTORY + '/consensus/{sample}.working/')),
         headers=temp(PIPELINE_DIRECTORY + '/consensus/{sample}.headers.txt'),
-        sorted_vcf=temp(PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sorted.vcf')
     threads: 4
     params:
         genome=REFERENCE,
@@ -92,13 +89,29 @@ rule jasmine_consensus:
         mkdir -p {output.tmp_dir}
         cat {params.headers} > {output.headers}
         jasmine --min_overlap={params.min_overlap} --min_seq_id={params.min_seq_id} --dup_to_ins --comma_filelist --output_genotypes out_file={output.tmp_vcf} genome_file={params.genome} threads={threads} out_dir={output.tmp_dir} file_list={input.pbsv_vcf},{input.sniffles_vcf}
-        bcftools annotate --header-lines {output.headers} {output.tmp_vcf} | bcftools sort -o {output.sorted_vcf}
-        python {SCRIPT_DIRECTORY}/transfer_annotations.py --input {output.sorted_vcf} --output {output.vcf} --annotation_db {input.sample_annotation_table} --annotation_json {input.annotation_json} 
+        bcftools annotate --header-lines {output.headers} {output.tmp_vcf} | bcftools sort -o {output.vcf}
+        '''
+
+rule annotate_consensus:
+    input: 
+        vcf=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.unsquashed.vcf',
+        pbsv_vcf=PIPELINE_DIRECTORY + '/prepped_pbsv/{sample}.pbsv.vcf',
+        sniffles_vcf=PIPELINE_DIRECTORY + '/prepped_sniffles/{sample}.sniffles.vcf',
+        sample_annotation_table=PIPELINE_DIRECTORY + '/consensus/{sample}.db/data.mdb',
+    output:
+        vcf=temp(PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.unsquashed.annotated.vcf')
+    conda: 'cyvcf2-lmdbm.yaml'
+    threads: 1
+    resources:
+        mem_mb=8*1024
+    shell:
+        '''
+        python {SCRIPT_DIRECTORY}/transfer_annotations.py --input {input.vcf} --output {output.vcf} --annotation_db {input.sample_annotation_table} --vcftuples {input.pbsv_vcf},pbsv {input.sniffles_vcf},sniffles
         '''
 
 rule squash_genotypes:
     input: 
-        vcf=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.unsquashed.vcf',
+        vcf=PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.unsquashed.annotated.vcf'
     output: 
         vcf=temp(PIPELINE_DIRECTORY + '/consensus/{sample}.consensus.sv.vcf'),
     conda: 'cyvcf2-lmdbm.yaml' # because it has numpy
@@ -107,7 +120,21 @@ rule squash_genotypes:
         mem_mb=2*1024
     shell:
         '''
-        python {SCRIPT_DIRECTORY}/squash_genotypes.py --input {input.vcf} --output {output.vcf} --sample {wildcards.sample}
+        python {SCRIPT_DIRECTORY}/simple_squash.py --input {input.vcf} --output {output.vcf} --sample {wildcards.sample}
+        '''
+
+rule clean_bnds:
+    input:
+        vcf=PIPELINE_DIRECTORY + '/annotated/{sample}.consensus.vcf',
+    output:
+        vcf=temp(PIPELINE_DIRECTORY + '/annotated/{sample}.consensus.cleanbnd.vcf')
+    conda: 'cyvcf2-lmdbm.yaml'
+    threads: 1
+    resources:
+        mem_mb=2*1024
+    shell:
+        '''
+        python {SCRIPT_DIRECTORY}/clean_bnds.py --input {input.vcf} --output {output.vcf}
         '''
 
 rule jasmine_annotation_merge:
@@ -132,7 +159,7 @@ rule jasmine_annotation_merge:
         jasmine --require_first_sample --centroid-merging --min_overlap={params.min_overlap} --min_seq_id={params.min_seq_id} --comma_filelist out_file={output.vcf} genome_file={params.genome} threads={threads} out_dir={output.tmp_dir} file_list={input.vcf},{params.annotation_vcfs}
         '''
 
-rule annotate_jasmine:
+rule transfer_consensus_annotations:
     input:
         vcf=PIPELINE_DIRECTORY + '/annotated/{sample}.annomerge.vcf',
         annotation_db=PIPELINE_DIRECTORY + '/annotation.db/data.mdb',
@@ -152,7 +179,7 @@ rule annotate_jasmine:
 
 rule bgzip_final:
     input: 
-        vcf=PIPELINE_DIRECTORY + '/annotated/{sample}.consensus.vcf'
+        vcf=PIPELINE_DIRECTORY + '/annotated/{sample}.consensus.cleanbnd.vcf'
     output: 
         vcf=PIPELINE_DIRECTORY + '/annotated/{sample}.consensus.sv.vcf.gz',
         tbi=PIPELINE_DIRECTORY + '/annotated/{sample}.consensus.sv.vcf.gz.tbi'
@@ -167,15 +194,14 @@ rule bgzip_final:
         '''
 
 rule build_annotation_table:
-    input: PIPELINE_DIRECTORY + '/ANNOTATIONS.json'
+    input: SCRIPT_DIRECTORY + '/annotations.json'
     output: PIPELINE_DIRECTORY + '/annotation.db/data.mdb'
     conda: 'cyvcf2-lmdbm.yaml'
     threads: 1
     resources:
-        mem_mb=4*1024
+        mem_mb=24*1024
     shell:
         '''
-
         python {SCRIPT_DIRECTORY}/build_annotation_table.py --output {output} --annotations {input}
         '''
 
