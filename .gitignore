@@ -1,3 +1,6 @@
+HALB_with_snf.txt
+other_with_snf.txt
+pbsv_only.txt
 .snakemake/
 pipeline/
 logs/
