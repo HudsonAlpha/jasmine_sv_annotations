@@ -1,0 +1,2 @@
+#! /bin/bash
+while read TYPE; do echo ${TYPE}; while read line; do bcftools filter -i 'SVTYPE=="'${TYPE}'"' singles/${line}.vcf.gz | grep -v ^# | wc -l; done < ../pb_halbs.txt | awk 'BEGIN{OFS="\t"; print "Count", "Mean", "Median", "Min", "Max", "StdDev"} {a[i++]=$1; sum+=$1; sumsq+=$1*$1} END{asort(a); min=a[1]; max=a[i]; if(i%2==1) median=a[int(i/2)+1]; else median=(a[i/2]+a[i/2+1])/2; mean=sum/i; stddev=sqrt(sumsq/i - (sum/i)^2); print i, mean, median, min, max, stddev;}'; done < svtypes.txt
